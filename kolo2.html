@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@800&display=block&subset=latin-ext" rel="stylesheet">
+
+<style>
+html,body{
+margin:0;
+background:transparent;
+overflow:hidden;
+font-family:'Sora',sans-serif;
+}
+
+#wrap{
+width:1920px;
+height:1080px;
+position:relative;
+transition:.8s;
+}
+#wrap.hide{opacity:0;}
+
+#wheel{
+position:absolute;
+left:50%;
+top:50%;
+transform:translate(-50%,-50%);
+}
+
+#pointer{
+position:absolute;
+right:460px;
+top:50%;
+transform:translateY(-50%);
+width:55px;height:35px;
+background:linear-gradient(90deg,#fff,#ffcc00);
+clip-path:polygon(0 50%,100% 80%,100% 20%);
+transform-origin:left center;
+}
+#pointer.bounce{animation:tick .1s;}
+@keyframes tick{
+50%{transform:translateY(-50%) rotate(15deg)}
+}
+
+#countdown{
+position:absolute;
+left:50%;top:50%;
+transform:translate(-50%,-50%);
+font-size:150px;
+color:white;
+opacity:0;
+transition:.3s;
+text-shadow:0 0 30px #000;
+}
+
+#resultBox{
+position:absolute;
+top:50%;left:50%;
+transform:translate(-50%,-50%) scale(.7);
+background:rgba(0,0,0,.9);
+padding:40px 60px;
+border-radius:25px;
+color:white;
+font-size:52px;
+opacity:0;
+transition:.5s;
+text-align:center;
+}
+#resultBox.show{
+opacity:1;
+transform:translate(-50%,-50%) scale(1);
+}
+</style>
+</head>
+
+<body>
+
+<div id="wrap" class="hide">
+<canvas id="wheel" width="900" height="900"></canvas>
+<div id="pointer"></div>
+<div id="countdown"></div>
+<div id="resultBox"></div>
+</div>
+
+<script>
+
+/* NAGRODY */
+const mainPrizes=[
+{name:"Łyk napoju",p:0.09},
+{name:"Cztery",p:0.04},
+{name:"Bekam",p:0.06},
+{name:"5 Przysiadów",p:0.07},
+{name:"Timeout 15min",p:0.09},
+{name:"67",p:0.08},
+{name:"Oddaje ci obserwacje",p:0.07},
+{name:"Chodzę przez minutę",p:0.07},
+{name:"Nie odzywam się 2 min",p:0.08},
+{name:"Stoję minute",p:0.05},
+{name:"10 pajacyków",p:0.1},
+{name:"Nic",p:0.09},
+{name:"Głos Skrzypasa 1min",p:0.09},
+{name:"JACKPOT",p:0.02}
+];
+
+const jackpotPrizes=[
+{name:"OG",p:.5},
+{name:"Nie odzywam się 10 min",p:.35},
+{name:"STREAM 24H",p:.15}
+];
+
+const canvas=document.getElementById("wheel");
+const ctx=canvas.getContext("2d");
+
+const center=450;
+const radius=450;
+
+let angle=0,lastTick=-1;
+
+/* TEXT (2 linie max) */
+function drawText(ctx,text,x,y,maxWidth){
+let words=text.split(" ");
+let lines=[];
+let current="";
+
+words.forEach(word=>{
+let test=current+(current?" ":"")+word;
+if(ctx.measureText(test).width<maxWidth){
+current=test;
+}else{
+lines.push(current);
+current=word;
+}
+});
+lines.push(current);
+
+if(lines.length>2){
+lines=[lines[0],lines.slice(1).join(" ")];
+}
+
+let lineHeight=30;
+let offset=-(lines.length-1)/2*lineHeight;
+
+lines.forEach((line,i)=>{
+ctx.fillText(line,x,y+offset+i*lineHeight);
+});
+}
+
+/* KOŁO */
+function drawWheel(a,arr){
+const slice=2*Math.PI/arr.length;
+ctx.clearRect(0,0,900,900);
+
+arr.forEach((p,i)=>{
+let start=a+i*slice;
+
+ctx.beginPath();
+ctx.moveTo(center,center);
+ctx.arc(center,center,radius,start,start+slice);
+ctx.fillStyle=`hsl(${i*30},70%,50%)`;
+ctx.fill();
+
+ctx.strokeStyle="#000";
+ctx.lineWidth=2;
+ctx.stroke();
+
+ctx.save();
+ctx.translate(center,center);
+ctx.rotate(start+slice/2);
+
+/* 🔥 LEKKO MNIEJSZA */
+ctx.font="800 26px Sora";
+ctx.fillStyle="#fff";
+ctx.textAlign="center";
+ctx.textBaseline="middle";
+
+drawText(ctx,p.name,radius*.60,0,radius*slice*.65);
+
+ctx.restore();
+});
+}
+
+/* LOSOWANIE */
+function pick(arr){
+let r=Math.random(),s=0;
+for(let p of arr){
+s+=p.p;
+if(r<=s)return p;
+}
+}
+
+/* POINTER */
+function tick(){
+let p=document.getElementById("pointer");
+p.classList.remove("bounce");
+void p.offsetWidth;
+p.classList.add("bounce");
+}
+
+/* COUNTDOWN */
+function countdown(next){
+let n=3;
+let el=document.getElementById("countdown");
+
+function step(){
+if(n===0){
+el.style.opacity=0;
+next();
+return;
+}
+el.innerText=n;
+el.style.opacity=1;
+n--;
+setTimeout(()=>{
+el.style.opacity=0;
+setTimeout(step,300);
+},700);
+}
+step();
+}
+
+/* SPIN */
+function spin(arr,isMain=true){
+const res=pick(arr);
+const i=arr.indexOf(res);
+const slice=2*Math.PI/arr.length;
+
+let target=Math.PI*2*6+i*slice+slice/2;
+let dur=5000,start=null;
+
+function anim(t){
+if(!start)start=t;
+let p=(t-start)/dur;
+if(p>1)p=1;
+
+let ease=1-Math.pow(1-p,3);
+angle=ease*target;
+
+drawWheel(-angle,arr);
+
+let ti=Math.floor((angle/(2*Math.PI))*arr.length)%arr.length;
+if(ti!==lastTick){
+tick();
+lastTick=ti;
+}
+
+if(p<1)requestAnimationFrame(anim);
+else show(res,isMain);
+}
+requestAnimationFrame(anim);
+}
+
+/* WYNIK */
+function show(res,isMain){
+let box=document.getElementById("resultBox");
+
+box.innerText=res.name;
+box.classList.add("show");
+
+if(res.name==="JACKPOT" && isMain){
+
+setTimeout(()=>{
+box.classList.remove("show");
+
+drawWheel(0,jackpotPrizes);
+
+setTimeout(()=>{
+countdown(()=>spin(jackpotPrizes,false));
+},300);
+
+},1500);
+
+return;
+}
+
+setTimeout(()=>{
+box.classList.remove("show");
+document.getElementById("wrap").classList.add("hide");
+},5000);
+}
+
+/* START */
+window.startWheel = () => {
+document.getElementById("wrap").classList.remove("hide");
+drawWheel(0, mainPrizes);
+setTimeout(()=>countdown(()=>spin(mainPrizes,true)),300);
+};
+
+/* FONT FIX */
+async function waitForFont(){
+await document.fonts.load("800 26px Sora");
+await document.fonts.ready;
+}
+
+window.onload = async () => {
+await waitForFont();
+drawWheel(0,mainPrizes);
+window.startWheel();
+};
+</script>
+
+</body>
+</html>
